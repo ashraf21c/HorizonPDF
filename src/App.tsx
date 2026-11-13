@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Contrast, Keyboard } from 'lucide-react';
 import type * as pdfjsLib from 'pdfjs-dist';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeveloperGuide } from './components/DeveloperGuide';
 import { EmbedModal } from './components/EmbedModal';
 import { Header } from './components/Header';
 import { HorizontalGalleryViewer } from './components/HorizontalGalleryViewer';
+import { ShortcutsModal } from './components/ShortcutsModal';
 import { StripConverter } from './components/StripConverter';
 import { AVAILABLE_LOCALES, I18nProvider, useI18n } from './i18n';
 import { loadPdfInfo, type ReadingDirection } from './lib/pdfTools';
@@ -65,9 +67,54 @@ function WorkspaceApp() {
   const [loadingPdf, setLoadingPdf] = useState<boolean>(true);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [embedModalOpen, setEmbedModalOpen] = useState<boolean>(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
+  const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
+  const [highContrast, setHighContrast] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('horizonpdf_high_contrast') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+
+  const announce = useCallback((msg: string) => {
+    setLiveAnnouncement('');
+    requestAnimationFrame(() => setLiveAnnouncement(msg));
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('high-contrast', highContrast);
+    try {
+      window.localStorage.setItem('horizonpdf_high_contrast', String(highContrast));
+    } catch {
+      // Ignore storage errors in sandboxed iframes
+    }
+  }, [highContrast]);
+
+  // Global '?' shortcut to open keyboard shortcuts dialog
+  useEffect(() => {
+    if (route.isEmbed) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT')
+      ) {
+        return;
+      }
+      if (e.key === '?' && !embedModalOpen) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [route.isEmbed, embedModalOpen]);
 
   const applyPdfBytes = useCallback(
     async (bytes: Uint8Array, nextTitle: string, nextIsSample: boolean, nextHostedId: string | null) => {
@@ -88,13 +135,18 @@ function WorkspaceApp() {
         setTitle(nextTitle);
         setIsSample(nextIsSample);
         setHostedId(nextHostedId);
+        announce(
+          t.a11y.announcedLoaded
+            .replace('{title}', nextTitle)
+            .replace('{total}', String(info.pageCount))
+        );
       } catch {
         setPdfError(t.viewer.errorPdf);
       } finally {
         setLoadingPdf(false);
       }
     },
-    [t.viewer.errorPdf]
+    [announce, t.a11y.announcedLoaded, t.viewer.errorPdf]
   );
 
   // Initial document load (hosted /view/:id, /embed/:id, or specimen sample)
@@ -188,7 +240,6 @@ function WorkspaceApp() {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
       await applyPdfBytes(bytes, file.name, false, null);
-      // Persist in background so Share & Embed is immediately ready
       void uploadToServer(bytes, file.name, direction);
     },
     [applyPdfBytes, direction, uploadToServer]
@@ -197,6 +248,12 @@ function WorkspaceApp() {
   const handleDirectionChange = useCallback(
     (nextDir: ReadingDirection) => {
       setDirection(nextDir);
+      announce(
+        t.a11y.announcedDirection.replace(
+          '{dir}',
+          nextDir === 'rtl' ? t.toolbar.rtlLabel : t.toolbar.ltrLabel
+        )
+      );
       if (hostedId) {
         void fetch(`/api/pdfs/${hostedId}`, {
           method: 'PATCH',
@@ -205,8 +262,16 @@ function WorkspaceApp() {
         }).catch(() => {});
       }
     },
-    [hostedId]
+    [announce, hostedId, t.a11y.announcedDirection, t.toolbar.ltrLabel, t.toolbar.rtlLabel]
   );
+
+  const handleToggleHighContrast = () => {
+    setHighContrast((prev) => {
+      const next = !prev;
+      announce(next ? t.a11y.announcedHighContrastOn : t.a11y.announcedHighContrastOff);
+      return next;
+    });
+  };
 
   const handleOpenEmbed = useCallback(async () => {
     setEmbedModalOpen(true);
@@ -230,27 +295,47 @@ function WorkspaceApp() {
   // Chromeless Iframe Embed Mode
   if (route.isEmbed) {
     return (
-      <HorizontalGalleryViewer
-        doc={pdfDoc}
-        pageCount={pageCount}
-        pageWidth={pageWidth}
-        pageHeight={pageHeight}
-        title={title}
-        direction={direction}
-        onChangeDirection={setDirection}
-        loading={loadingPdf}
-        error={pdfError}
-        chromeless
-      />
+      <>
+        <div role="status" aria-live="polite" className="sr-only">
+          {liveAnnouncement}
+        </div>
+        <HorizontalGalleryViewer
+          doc={pdfDoc}
+          pageCount={pageCount}
+          pageWidth={pageWidth}
+          pageHeight={pageHeight}
+          title={title}
+          direction={direction}
+          onChangeDirection={setDirection}
+          loading={loadingPdf}
+          error={pdfError}
+          chromeless
+          onAnnounce={announce}
+        />
+      </>
     );
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F7F4] text-[#141413]">
+      {/* Skip Navigation Link for Keyboard & Screen Reader Users */}
+      <a
+        href="#workspace"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-[#141413] focus:text-white focus:text-sm focus:font-medium focus:rounded-lg"
+      >
+        {t.a11y.skipToContent}
+      </a>
+
+      {/* Polite Screen-Reader Status Announcer */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveAnnouncement}
+      </div>
+
       <input
         ref={fileInputRef}
         type="file"
         accept="application/pdf,.pdf"
+        aria-label={t.actions.uploadPdf}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -266,12 +351,12 @@ function WorkspaceApp() {
         onTriggerUpload={() => fileInputRef.current?.click()}
       />
 
-      <main id="workspace" className="flex-1 max-w-[1440px] w-full mx-auto px-6 py-6 space-y-5">
-        {/* Workspace Toolbar: Document metadata + Mode + Reading Direction + Language */}
+      <main id="workspace" tabIndex={-1} className="flex-1 max-w-[1440px] w-full mx-auto px-6 py-6 space-y-5 outline-none">
+        {/* Workspace Toolbar: Document metadata + Mode + Reading Direction + Language + Accessibility */}
         <section className="bg-white border border-[#E5E5E0] rounded-xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           {/* Document metadata (unboxed text with typographic separators) */}
           <div className="flex flex-wrap items-center gap-2 text-sm min-w-0">
-            <span className="font-semibold text-[#141413] truncate max-w-[260px]">{title}</span>
+            <span className="font-semibold text-[#141413] truncate max-w-[240px]">{title}</span>
             {pageCount > 0 && (
               <>
                 <span className="text-[#B8B8B0]" aria-hidden="true">·</span>
@@ -306,12 +391,14 @@ function WorkspaceApp() {
             )}
           </div>
 
-          {/* Controls: Mode Tabs, Direction (LTR/RTL), Multilingual Switcher */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Controls: Mode Tabs, Direction (LTR/RTL), Multilingual Switcher, Accessibility */}
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Workspace Mode Switch */}
-            <div className="flex items-center p-1 bg-[#F2F2EE] rounded-lg">
+            <div role="tablist" aria-label="Workspace mode" className="flex items-center p-1 bg-[#F2F2EE] rounded-lg">
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeMode === 'viewer'}
                 onClick={() => setActiveMode('viewer')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeMode === 'viewer'
@@ -323,6 +410,8 @@ function WorkspaceApp() {
               </button>
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeMode === 'converter'}
                 onClick={() => setActiveMode('converter')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeMode === 'converter'
@@ -342,6 +431,7 @@ function WorkspaceApp() {
               <div className="flex items-center p-1 bg-[#F2F2EE] rounded-lg">
                 <button
                   type="button"
+                  aria-pressed={direction === 'ltr'}
                   onClick={() => handleDirectionChange('ltr')}
                   className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     direction === 'ltr'
@@ -353,6 +443,7 @@ function WorkspaceApp() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={direction === 'rtl'}
                   onClick={() => handleDirectionChange('rtl')}
                   className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     direction === 'rtl'
@@ -366,11 +457,12 @@ function WorkspaceApp() {
             </div>
 
             {/* Language Switcher (English / Arabic / Japanese) */}
-            <div className="flex items-center p-1 bg-[#F2F2EE] rounded-lg">
+            <div className="flex items-center p-1 bg-[#F2F2EE] rounded-lg" role="group" aria-label={t.toolbar.languageLabel}>
               {AVAILABLE_LOCALES.map((loc) => (
                 <button
                   key={loc.code}
                   type="button"
+                  aria-pressed={locale === loc.code}
                   onClick={() => setLocale(loc.code)}
                   className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     locale === loc.code
@@ -381,6 +473,32 @@ function WorkspaceApp() {
                   {loc.nativeName}
                 </button>
               ))}
+            </div>
+
+            {/* Accessibility Controls: High Contrast & Keyboard Shortcuts */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-pressed={highContrast}
+                onClick={handleToggleHighContrast}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  highContrast
+                    ? 'bg-[#141413] text-white border-[#141413]'
+                    : 'border-[#E5E5E0] text-[#141413] hover:bg-[#F5F5F2]'
+                }`}
+              >
+                <Contrast className="w-3.5 h-3.5" />
+                <span>{t.a11y.highContrastToggle}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShortcutsOpen(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[#E5E5E0] text-[#141413] hover:bg-[#F5F5F2] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+                <span>{t.a11y.shortcutsButton}</span>
+              </button>
             </div>
           </div>
         </section>
@@ -399,6 +517,7 @@ function WorkspaceApp() {
             onOpenEmbed={() => void handleOpenEmbed()}
             onDropFile={(file) => void handleFileSelected(file)}
             onTriggerUpload={() => fileInputRef.current?.click()}
+            onAnnounce={announce}
           />
         ) : (
           <StripConverter
@@ -407,6 +526,7 @@ function WorkspaceApp() {
             pageCount={pageCount}
             direction={direction}
             onChangeDirection={handleDirectionChange}
+            onAnnounce={announce}
           />
         )}
 
@@ -435,6 +555,11 @@ function WorkspaceApp() {
         pageHeight={pageHeight}
         loadingPdf={loadingPdf}
         pdfError={pdfError}
+      />
+
+      <ShortcutsModal
+        isOpen={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
       />
     </div>
   );

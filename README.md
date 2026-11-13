@@ -27,6 +27,10 @@ HorizonPDF renders multi-page PDF documents horizontally side-by-side like a vis
 4. **Multilingual Interface (`en`, `ar`, `ja`)**
    - Automatically switches HTML `lang` and `dir` (`rtl` for Arabic, `ltr` for English and Japanese).
 
+5. **WCAG 2.1 AA Accessibility Features**
+   - Includes PDF text extraction for screen readers, **Accessible Text View (`T`)**, `aria-live` status announcements, full keyboard navigation (`Left`/`Right`/`Home`/`End`/`PageUp`/`PageDown`/`+`/`-`/`0`/`?`), direct page-jump selector, modal focus trapping, **High Contrast** mode, and `prefers-reduced-motion` compliance.
+   - Full trilingual accessibility documentation (English, العربية, 日本語) is available in [`ACCESSIBILITY.md`](./ACCESSIBILITY.md).
+
 ---
 
 ## Server Requirements

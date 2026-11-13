@@ -14,6 +14,52 @@
   code, pre, .font-mono {
     font-family: var(--font-mono);
   }
+
+  :focus-visible {
+    outline: 2px solid #C83E2B;
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Explicit High-Contrast Accessibility Mode */
+html.high-contrast body {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+html.high-contrast .border-\[\#E5E5E0\],
+html.high-contrast .border-\[\#D6D6D0\] {
+  border-color: #141413 !important;
+}
+
+html.high-contrast .text-\[\#5C5C57\],
+html.high-contrast .text-\[\#6B6B65\],
+html.high-contrast .text-\[\#8E8E87\] {
+  color: #1f1f1d !important;
+}
+
+html.high-contrast .bg-\[\#F2F2EE\],
+html.high-contrast .bg-\[\#F7F7F4\] {
+  background-color: #eeeee9 !important;
+}
+
+html.high-contrast :focus-visible {
+  outline: 3px solid #000000;
+  outline-offset: 2px;
 }
 
 .tabular-nums {

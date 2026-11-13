@@ -1,6 +1,6 @@
 import { Check, Copy, ExternalLink, X } from 'lucide-react';
 import type * as pdfjsLib from 'pdfjs-dist';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import {
   EMBED_LANG_LABELS,
@@ -45,14 +45,42 @@ export function EmbedModal({
   const [embedLang, setEmbedLang] = useState<EmbedLang>('html');
   const [height, setHeight] = useState<number>(600);
   const [copiedKey, setCopiedKey] = useState<'share' | 'embed' | 'code' | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    requestAnimationFrame(() => closeBtnRef.current?.focus());
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocusRef.current?.focus?.();
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -83,19 +111,26 @@ export function EmbedModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="embed-modal-title"
         className="w-full max-w-3xl bg-white border border-[#E5E5E0] rounded-xl shadow-xl overflow-hidden my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[#E5E5E0]">
           <div>
-            <h2 className="text-lg font-semibold text-[#141413]">{t.embed.modalTitle}</h2>
+            <h2 id="embed-modal-title" className="text-lg font-semibold text-[#141413]">
+              {t.embed.modalTitle}
+            </h2>
             <p className="text-xs text-[#5C5C57] mt-0.5">{t.embed.modalSubtitle}</p>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label={t.actions.close}
-            className="p-1.5 rounded-lg text-[#5C5C57] hover:text-[#141413] hover:bg-[#F2F2EE] cursor-pointer"
+            className="p-2 rounded-lg text-[#5C5C57] hover:text-[#141413] hover:bg-[#F2F2EE] cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

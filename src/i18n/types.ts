@@ -9,6 +9,11 @@ export interface LocaleMeta {
   dir: TextDirection;
 }
 
+export interface ShortcutItem {
+  keys: string;
+  action: string;
+}
+
 export interface TranslationDictionary {
   brandName: string;
   nav: {
@@ -104,6 +109,30 @@ export interface TranslationDictionary {
     i18nTitle: string;
     i18nSteps: string[];
     readmeNote: string;
+  };
+  a11y: {
+    skipToContent: string;
+    mainNavLabel: string;
+    galleryRegionLabel: string;
+    pageJumpLabel: string;
+    textViewToggle: string;
+    canvasViewToggle: string;
+    textScaleIncrease: string;
+    textScaleDecrease: string;
+    highContrastToggle: string;
+    shortcutsButton: string;
+    shortcutsTitle: string;
+    shortcutsSubtitle: string;
+    noExtractableText: string;
+    announcedPage: string;
+    announcedLoaded: string;
+    announcedDirection: string;
+    announcedConverted: string;
+    announcedTextViewOn: string;
+    announcedTextViewOff: string;
+    announcedHighContrastOn: string;
+    announcedHighContrastOff: string;
+    shortcuts: ShortcutItem[];
   };
 }
 

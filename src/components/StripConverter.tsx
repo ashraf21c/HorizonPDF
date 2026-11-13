@@ -26,6 +26,7 @@ interface StripConverterProps {
   pageCount: number;
   direction: ReadingDirection;
   onChangeDirection: (dir: ReadingDirection) => void;
+  onAnnounce?: (message: string) => void;
 }
 
 function PdfStripPreview({
@@ -143,6 +144,7 @@ export function StripConverter({
   pageCount,
   direction,
   onChangeDirection,
+  onAnnounce,
 }: StripConverterProps) {
   const { t } = useI18n();
 
@@ -212,6 +214,9 @@ export function StripConverter({
       }
 
       setOutput(result);
+      onAnnounce?.(
+        t.a11y.announcedConverted.replace('{filename}', result.filename)
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Conversion failed');
     } finally {
@@ -279,6 +284,7 @@ export function StripConverter({
                 <button
                   key={opt.id}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => setFormat(opt.id)}
                   className={`text-start p-3 rounded-lg border transition-colors cursor-pointer ${
                     selected

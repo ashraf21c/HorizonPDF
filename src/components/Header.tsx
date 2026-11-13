@@ -33,9 +33,13 @@ export function Header({
         </a>
 
         {/* Zone 2: Concise single-line text navigation links */}
-        <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-[#5C5C57]">
+        <nav
+          aria-label={t.a11y.mainNavLabel}
+          className="hidden md:flex items-center gap-7 text-sm font-medium text-[#5C5C57]"
+        >
           <a
             href="#viewer"
+            aria-current={activeMode === 'viewer' ? 'page' : undefined}
             onClick={(e) => {
               e.preventDefault();
               onSelectMode('viewer');
@@ -49,6 +53,7 @@ export function Header({
           </a>
           <a
             href="#converter"
+            aria-current={activeMode === 'converter' ? 'page' : undefined}
             onClick={(e) => {
               e.preventDefault();
               onSelectMode('converter');

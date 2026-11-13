@@ -77,6 +77,39 @@ export async function renderPageToCanvas(
   };
 }
 
+export async function extractPageText(
+  doc: pdfjsLib.PDFDocumentProxy,
+  pageNumber: number
+): Promise<string> {
+  const page = await doc.getPage(pageNumber);
+  const content = await page.getTextContent();
+  let lastY: number | null = null;
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const item of content.items) {
+    if (!('str' in item)) continue;
+    const textItem = item as { str: string; transform?: number[]; hasEOL?: boolean };
+    const y = textItem.transform?.[5] ?? null;
+
+    if (lastY !== null && y !== null && Math.abs(y - lastY) > 4) {
+      if (currentLine.trim()) lines.push(currentLine.trim());
+      currentLine = textItem.str;
+    } else {
+      currentLine += (currentLine && textItem.str && !currentLine.endsWith(' ') ? ' ' : '') + textItem.str;
+    }
+
+    if (textItem.hasEOL && currentLine.trim()) {
+      lines.push(currentLine.trim());
+      currentLine = '';
+    }
+    lastY = y;
+  }
+
+  if (currentLine.trim()) lines.push(currentLine.trim());
+  return lines.join('\n').trim();
+}
+
 function getOrderedIndices(count: number, direction: ReadingDirection): number[] {
   const indices = Array.from({ length: count }, (_, i) => i);
   return direction === 'rtl' ? indices.reverse() : indices;
@@ -328,6 +361,7 @@ export function buildStandaloneHtmlGallery(options: {
       font-weight: 500;
     }
     .controls button:hover { background: #F5F5F2; }
+    .controls button:focus-visible { outline: 2px solid #C83E2B; outline-offset: 2px; }
     .strip {
       flex: 1;
       display: flex;
@@ -338,6 +372,10 @@ export function buildStandaloneHtmlGallery(options: {
       overflow-${isHoriz ? 'x' : 'y'}: auto;
       overflow-${isHoriz ? 'y' : 'x'}: hidden;
       scroll-behavior: smooth;
+    }
+    .strip:focus-visible { outline: 2px solid #C83E2B; outline-offset: -2px; }
+    @media (prefers-reduced-motion: reduce) {
+      .strip { scroll-behavior: auto; }
     }
     .page {
       flex: 0 0 auto;
@@ -351,30 +389,31 @@ export function buildStandaloneHtmlGallery(options: {
   </style>
 </head>
 <body>
-  <div class="bar">
+  <header class="bar">
     <strong>${safeTitle}</strong>
     <div class="controls">
       <span>${ordered.length} pages · ${options.direction.toUpperCase()}</span>
       ${
         isHoriz
-          ? '<button type="button" onclick="scrollStrip(-1)">&larr;</button><button type="button" onclick="scrollStrip(1)">&rarr;</button>'
+          ? '<button type="button" aria-label="Scroll left" onclick="scrollStrip(-1)">&larr;</button><button type="button" aria-label="Scroll right" onclick="scrollStrip(1)">&rarr;</button>'
           : ''
       }
     </div>
-  </div>
-  <main id="strip" class="strip">
+  </header>
+  <main id="strip" class="strip" tabindex="0" role="region" aria-label="${safeTitle} gallery">
       ${pagesMarkup}
   </main>
   <script>
     var strip = document.getElementById('strip');
     var isRtl = ${options.direction === 'rtl' ? 'true' : 'false'};
     var isHoriz = ${isHoriz ? 'true' : 'false'};
+    var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isHoriz && isRtl) {
       strip.scrollLeft = strip.scrollWidth;
     }
     function scrollStrip(step) {
       var delta = Math.max(320, strip.clientWidth * 0.72) * step;
-      strip.scrollBy({ left: delta, behavior: 'smooth' });
+      strip.scrollBy({ left: delta, behavior: prefersReduced ? 'auto' : 'smooth' });
     }
     if (isHoriz) {
       strip.addEventListener('wheel', function(e) {
@@ -383,6 +422,12 @@ export function buildStandaloneHtmlGallery(options: {
           strip.scrollLeft += e.deltaY;
         }
       }, { passive: false });
+      window.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); scrollStrip(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); scrollStrip(1); }
+        else if (e.key === 'Home') { e.preventDefault(); strip.scrollTo({ left: isRtl ? strip.scrollWidth : 0, behavior: prefersReduced ? 'auto' : 'smooth' }); }
+        else if (e.key === 'End') { e.preventDefault(); strip.scrollTo({ left: isRtl ? 0 : strip.scrollWidth, behavior: prefersReduced ? 'auto' : 'smooth' }); }
+      });
     }
   </script>
 </body>
