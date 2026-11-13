@@ -26,6 +26,7 @@ export interface ConvertedOutput {
   previewUrl: string;
   previewType: 'image' | 'pdf' | 'html';
   htmlString?: string;
+  pdfBytes?: Uint8Array;
 }
 
 export async function loadPdfInfo(bytes: Uint8Array): Promise<LoadedPdfInfo> {
@@ -153,6 +154,7 @@ export async function convertPdfToSingleSheetPdf(
     scaledDown: false,
     previewUrl,
     previewType: 'pdf',
+    pdfBytes: outBytes,
   };
 }
 
@@ -452,15 +454,20 @@ export async function convertPdfToZipBundle(
   const htmlOut = await convertPdfToStandaloneHtml(bytes, options);
 
   const zip = new JSZip();
-  zip.file(jpgOut.filename, jpgOut.blob);
-  zip.file(pdfOut.filename, pdfOut.blob);
+  zip.file(jpgOut.filename, await jpgOut.blob.arrayBuffer());
+  zip.file(pdfOut.filename, pdfOut.pdfBytes ?? (await pdfOut.blob.arrayBuffer()));
   zip.file('gallery-embed.html', htmlOut.htmlString || '');
   zip.file(
     'embed-snippet.txt',
     `<!-- Option 1: Embed Standalone HTML Gallery -->\n<iframe src="./gallery-embed.html" width="100%" height="640" style="border:1px solid #e5e5e0;border-radius:8px;" loading="lazy"></iframe>\n\n<!-- Option 2: Direct Horizontal Strip Image -->\n<div style="overflow-x:auto;direction:${options.direction};"><img src="./${jpgOut.filename}" alt="${cleanName}" style="height:600px;width:auto;max-width:none;display:block;" /></div>\n`
   );
 
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const zipBlob = await zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/zip',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
   URL.revokeObjectURL(pdfOut.previewUrl);
   URL.revokeObjectURL(htmlOut.previewUrl);
 

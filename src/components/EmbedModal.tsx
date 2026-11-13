@@ -1,4 +1,5 @@
 import { Check, Copy, ExternalLink, X } from 'lucide-react';
+import type * as pdfjsLib from 'pdfjs-dist';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import {
@@ -7,6 +8,7 @@ import {
   type EmbedLang,
 } from '../lib/embedCodes';
 import type { ReadingDirection } from '../lib/pdfTools';
+import { HorizontalGalleryViewer } from './HorizontalGalleryViewer';
 
 interface EmbedModalProps {
   isOpen: boolean;
@@ -15,6 +17,13 @@ interface EmbedModalProps {
   savingHost: boolean;
   title: string;
   direction: ReadingDirection;
+  onChangeDirection: (dir: ReadingDirection) => void;
+  pdfDoc: pdfjsLib.PDFDocumentProxy | null;
+  pageCount: number;
+  pageWidth: number;
+  pageHeight: number;
+  loadingPdf: boolean;
+  pdfError: string | null;
 }
 
 export function EmbedModal({
@@ -24,6 +33,13 @@ export function EmbedModal({
   savingHost,
   title,
   direction,
+  onChangeDirection,
+  pdfDoc,
+  pageCount,
+  pageWidth,
+  pageHeight,
+  loadingPdf,
+  pdfError,
 }: EmbedModalProps) {
   const { t, locale } = useI18n();
   const [embedLang, setEmbedLang] = useState<EmbedLang>('html');
@@ -85,7 +101,7 @@ export function EmbedModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+        <div className="p-6 space-y-5 max-h-[84vh] overflow-y-auto">
           {savingHost ? (
             <div className="p-4 rounded-lg bg-[#F7F7F4] border border-[#E5E5E0] text-sm text-[#5C5C57]">
               {t.embed.uploadingToHost}
@@ -150,6 +166,15 @@ export function EmbedModal({
                         <Copy className="w-4 h-4 text-[#141413]" />
                       )}
                     </button>
+                    <a
+                      href={embedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2 rounded-lg border border-[#E5E5E0] hover:bg-[#F2F2EE] shrink-0"
+                      title={t.actions.openFullscreen}
+                    >
+                      <ExternalLink className="w-4 h-4 text-[#141413]" />
+                    </a>
                   </div>
                 </div>
               </div>
@@ -210,13 +235,33 @@ export function EmbedModal({
                 </pre>
               </div>
 
-              {/* Live Iframe Preview */}
+              {/* Instant Live Chromeless Preview */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-[#141413]">{t.embed.previewTitle}</p>
-                <iframe
-                  src={embedUrl}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#141413]">{t.embed.previewTitle}</p>
+                  <a
+                    href={embedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-[#5C5C57] hover:text-[#C83E2B]"
+                  >
+                    <span>{t.actions.openFullscreen}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                <HorizontalGalleryViewer
+                  doc={pdfDoc}
+                  pageCount={pageCount}
+                  pageWidth={pageWidth}
+                  pageHeight={pageHeight}
                   title={title}
-                  className="w-full h-[260px] rounded-lg border border-[#E5E5E0] bg-[#EFEFED]"
+                  direction={direction}
+                  onChangeDirection={onChangeDirection}
+                  loading={loadingPdf}
+                  error={pdfError}
+                  chromeless
+                  embeddedPreview
+                  openViewerUrl={shareUrl}
                 />
               </div>
             </>

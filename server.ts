@@ -257,12 +257,17 @@ async function startServer() {
 
   const app = express();
 
-  // Allow iframe embedding for /embed/* and PDF file routes
+  // Allow iframe embedding and PDF streaming for /embed/*, /api/pdfs/*, and /api/sample-pdf
   app.use((req, res, next) => {
-    if (req.path.startsWith('/embed/') || req.path.startsWith('/api/pdfs/')) {
+    if (
+      req.path.startsWith('/embed/') ||
+      req.path.startsWith('/api/pdfs/') ||
+      req.path === '/api/sample-pdf'
+    ) {
       res.removeHeader('X-Frame-Options');
       res.setHeader('Content-Security-Policy', 'frame-ancestors *');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
     next();
   });

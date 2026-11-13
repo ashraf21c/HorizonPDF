@@ -1,5 +1,5 @@
 import { Check, Copy, Download, FileCode2, FileImage, FileText, FolderArchive } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import {
   EMBED_LANG_LABELS,
@@ -12,6 +12,8 @@ import {
   convertPdfToStitchedJpg,
   convertPdfToZipBundle,
   formatBytes,
+  loadPdfInfo,
+  renderPageToCanvas,
   type ConvertedOutput,
   type ExportFormat,
   type ReadingDirection,
@@ -24,6 +26,115 @@ interface StripConverterProps {
   pageCount: number;
   direction: ReadingDirection;
   onChangeDirection: (dir: ReadingDirection) => void;
+}
+
+function PdfStripPreview({
+  pdfBytes,
+  orientation,
+  direction,
+}: {
+  pdfBytes: Uint8Array;
+  orientation: StripOrientation;
+  direction: ReadingDirection;
+}) {
+  const { t } = useI18n();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [rendering, setRendering] = useState(true);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let loadedDoc: Awaited<ReturnType<typeof loadPdfInfo>>['doc'] | null = null;
+
+    async function renderPreview() {
+      if (!canvasRef.current) return;
+      setRendering(true);
+      setRenderError(null);
+
+      try {
+        const info = await loadPdfInfo(pdfBytes);
+        loadedDoc = info.doc;
+        if (cancelled || !canvasRef.current) return;
+
+        // Fit preview cleanly while clamping within safe browser canvas pixel limits
+        const targetScale =
+          orientation === 'horizontal'
+            ? 260 / Math.max(1, info.pageHeight)
+            : 420 / Math.max(1, info.pageWidth);
+        const maxDim = 14000;
+        const maxScaleByDim = Math.min(
+          maxDim / Math.max(1, info.pageWidth),
+          maxDim / Math.max(1, info.pageHeight)
+        );
+        const safeScale = Math.max(0.1, Math.min(targetScale, maxScaleByDim, 2));
+        const dpr = Math.min(
+          typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+          maxDim / Math.max(1, info.pageWidth * safeScale, info.pageHeight * safeScale)
+        );
+
+        await renderPageToCanvas(info.doc, 1, canvasRef.current, safeScale, Math.max(1, dpr));
+        if (cancelled) return;
+
+        if (containerRef.current && orientation === 'horizontal') {
+          requestAnimationFrame(() => {
+            if (!containerRef.current) return;
+            containerRef.current.scrollLeft =
+              direction === 'rtl' ? containerRef.current.scrollWidth : 0;
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setRenderError(t.viewer.errorPdf);
+        }
+      } finally {
+        if (!cancelled) setRendering(false);
+      }
+    }
+
+    void renderPreview();
+
+    return () => {
+      cancelled = true;
+      if (loadedDoc) {
+        void loadedDoc.cleanup().catch(() => {});
+      }
+    };
+  }, [pdfBytes, orientation, direction, t.viewer.errorPdf]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || orientation !== 'horizontal') return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [orientation]);
+
+  return (
+    <div
+      ref={containerRef}
+      dir="ltr"
+      className="relative gallery-scroll rounded-lg bg-[#EFEFED] border border-[#E5E5E0] p-4 overflow-auto max-h-[340px]"
+    >
+      {rendering && (
+        <div className="py-12 text-center text-xs text-[#5C5C57]">{t.viewer.loadingPdf}</div>
+      )}
+      {renderError && (
+        <div className="py-12 text-center text-xs text-[#B91C1C]">{renderError}</div>
+      )}
+      <canvas
+        ref={canvasRef}
+        className={`block shadow-sm bg-white ${
+          orientation === 'vertical' ? 'mx-auto' : ''
+        } ${rendering || renderError ? 'hidden' : ''}`}
+      />
+    </div>
+  );
 }
 
 export function StripConverter({
@@ -110,12 +221,14 @@ export function StripConverter({
 
   const handleDownload = () => {
     if (!output) return;
+    const downloadUrl = URL.createObjectURL(output.blob);
     const link = document.createElement('a');
-    link.href = output.previewUrl;
+    link.href = downloadUrl;
     link.download = output.filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
   };
 
   const activeFilename =
@@ -343,9 +456,15 @@ export function StripConverter({
                 }
               />
             </div>
+          ) : output.previewType === 'pdf' && output.pdfBytes ? (
+            <PdfStripPreview
+              pdfBytes={output.pdfBytes}
+              orientation={orientation}
+              direction={direction}
+            />
           ) : (
             <iframe
-              src={output.previewUrl}
+              srcDoc={output.htmlString}
               title={output.filename}
               className="w-full h-[340px] rounded-lg border border-[#E5E5E0] bg-[#EFEFED]"
             />

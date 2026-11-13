@@ -100,20 +100,28 @@ function WorkspaceApp() {
   // Initial document load (hosted /view/:id, /embed/:id, or specimen sample)
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
     async function loadInitial() {
       setLoadingPdf(true);
       setPdfError(null);
       try {
         if (route.pdfId) {
-          const metaRes = await fetch(`/api/pdfs/${route.pdfId}`);
+          const metaRes = await fetch(`/api/pdfs/${route.pdfId}`, {
+            credentials: 'include',
+            signal: controller.signal,
+          });
           if (!metaRes.ok) throw new Error('Document not found');
           const meta = (await metaRes.json()) as {
             id: string;
             title: string;
             direction: ReadingDirection;
           };
-          const fileRes = await fetch(`/api/pdfs/${route.pdfId}/file`);
+          const fileRes = await fetch(`/api/pdfs/${route.pdfId}/file`, {
+            credentials: 'include',
+            signal: controller.signal,
+          });
           if (!fileRes.ok) throw new Error('PDF stream failed');
           const buf = new Uint8Array(await fileRes.arrayBuffer());
           if (cancelled) return;
@@ -122,7 +130,10 @@ function WorkspaceApp() {
           }
           await applyPdfBytes(buf, meta.title, false, meta.id);
         } else {
-          const sampleRes = await fetch('/api/sample-pdf');
+          const sampleRes = await fetch('/api/sample-pdf', {
+            credentials: 'include',
+            signal: controller.signal,
+          });
           if (!sampleRes.ok) throw new Error('Sample PDF failed');
           const buf = new Uint8Array(await sampleRes.arrayBuffer());
           if (cancelled) return;
@@ -133,12 +144,16 @@ function WorkspaceApp() {
           setPdfError(t.viewer.errorPdf);
           setLoadingPdf(false);
         }
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     }
 
     loadInitial();
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
@@ -413,6 +428,13 @@ function WorkspaceApp() {
         savingHost={savingHost}
         title={title}
         direction={direction}
+        onChangeDirection={handleDirectionChange}
+        pdfDoc={pdfDoc}
+        pageCount={pageCount}
+        pageWidth={pageWidth}
+        pageHeight={pageHeight}
+        loadingPdf={loadingPdf}
+        pdfError={pdfError}
       />
     </div>
   );

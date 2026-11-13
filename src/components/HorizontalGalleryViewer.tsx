@@ -23,6 +23,8 @@ interface HorizontalGalleryViewerProps {
   loading: boolean;
   error: string | null;
   chromeless?: boolean;
+  embeddedPreview?: boolean;
+  openViewerUrl?: string;
   onOpenEmbed?: () => void;
   onDropFile?: (file: File) => void;
   onTriggerUpload?: () => void;
@@ -133,6 +135,8 @@ export function HorizontalGalleryViewer({
   loading,
   error,
   chromeless = false,
+  embeddedPreview = false,
+  openViewerUrl,
   onOpenEmbed,
   onDropFile,
   onTriggerUpload,
@@ -167,14 +171,15 @@ export function HorizontalGalleryViewer({
   const effectiveScale = useMemo(() => {
     if (!pageHeight) return 1;
     if (zoomMode === 'fit') {
-      const availableH = Math.max(220, stageHeight - 88);
-      return Math.min(2, Math.max(0.35, availableH / pageHeight));
+      const paddingY = embeddedPreview ? 56 : 88;
+      const availableH = Math.max(110, stageHeight - paddingY);
+      return Math.min(2, Math.max(0.18, availableH / pageHeight));
     }
     return zoomMode;
-  }, [zoomMode, stageHeight, pageHeight]);
+  }, [zoomMode, stageHeight, pageHeight, embeddedPreview]);
 
-  const tileWidth = Math.max(120, pageWidth * effectiveScale);
-  const tileHeight = Math.max(160, pageHeight * effectiveScale);
+  const tileWidth = Math.max(90, pageWidth * effectiveScale);
+  const tileHeight = Math.max(120, pageHeight * effectiveScale);
 
   // Ordered physical array left-to-right:
   // LTR -> [1, 2, ..., N]
@@ -289,7 +294,11 @@ export function HorizontalGalleryViewer({
       onDragLeave={() => setIsDraggingFile(false)}
       onDrop={handleDrop}
       className={`relative flex flex-col border border-[#E5E5E0] bg-white overflow-hidden ${
-        chromeless ? 'h-screen rounded-none border-0' : 'rounded-xl h-[70vh] min-h-[540px]'
+        embeddedPreview
+          ? 'h-[310px] rounded-lg'
+          : chromeless
+            ? 'h-screen rounded-none border-0'
+            : 'rounded-xl h-[70vh] min-h-[540px]'
       }`}
     >
       {/* Top minimal bar in chromeless embed mode */}
@@ -325,7 +334,7 @@ export function HorizontalGalleryViewer({
               </div>
             )}
             <a
-              href={window.location.href.replace('/embed/', '/view/')}
+              href={openViewerUrl || window.location.href.replace('/embed/', '/view/')}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 px-2.5 py-1 text-[#141413] hover:text-[#C83E2B] whitespace-nowrap"
