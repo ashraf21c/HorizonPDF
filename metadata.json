@@ -1,0 +1,6 @@
+{
+  "name": "HorizonPDF",
+  "description": "Horizontal PDF gallery viewer and continuous strip converter with RTL/LTR reading direction, embed code generator, and Arabic, Japanese, and English support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: "Plus Jakarta Sans", "IBM Plex Sans Arabic", "Noto Sans JP", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle horizontal gallery scrollbar */
+.gallery-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.gallery-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gallery-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 115, 0.35);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.gallery-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 115, 0.55);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
